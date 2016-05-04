@@ -3,16 +3,17 @@ import sys
 import time
 import argparse
 import numpy as np
+import nengo_brainstorm_pp.preprocessing as pp
 
 import nengo
 
 
 # ----- Defaults -----
-def_dim = 256
-def_seq = 'A'
+def_dim = 2
+#def_seq = 'A'
 # def_seq = 'A0[#1]?X'
 # def_seq = 'A0[#1#2#3]?XXX'
-# def_seq = 'A1[#1]?XXX'
+def_seq = 'A1[#1]?XXX'
 # def_seq = 'A2?XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
 # def_seq = 'A3[1234]?XXXX'
 # def_seq = 'A3[123]?XXXX'
@@ -30,7 +31,7 @@ def_seq = 'A'
 # def_seq = 'A7[1][2][3][2]?XX'
 # def_seq = 'A7[1][11][111][2][22][222][3][33]?XXXXX'
 # def_seq = 'A1[1]?XXA1[22]?XX'
-def_seq = '{A1[R]?X:5}'
+#def_seq = '{A1[R]?X:5}'
 
 def_mpi_p = 128
 
@@ -134,7 +135,7 @@ print "BACKEND: %s" % cfg.backend.upper()
 # ----- Seeeeeeeed -----
 # cfg.set_seed(1413987955)
 # cfg.set_seed(1414248095)
-# cfg.set_seed(1429562767)
+#cfg.set_seed(1429562767)
 cfg.set_seed(args.seed)
 print "MODEL SEED: %i" % cfg.seed
 
@@ -169,9 +170,32 @@ from _spaun.utils import get_total_n_neurons
 from _spaun.probes import idstr, config_and_setup_probes
 from _spaun.spaun_main import Spaun
 from _spaun.modules import get_est_runtime
+from _spaun.vocabs import vocab
 
 # ----- Spaun proper -----
+
 model = Spaun()
+
+# Uncommenting the following code can create the different major subblocks
+# of the WorkingMemory module
+#model = nengo.Network()
+#with model:
+#    ensemble_array_gate = cfg.make_ens_array_gate() 
+    #memory_block = cfg.make_mem_block(vocab=vocab,reset_key=0)
+    #selector = cfg.make_selector(3,default_sel=0)
+#    in_node_0 = nengo.Node(output=1,label='in_node_0')
+    #in_node_1 = nengo.Node(output=(1,1),label='in_node_1')
+    #in_node_2 = nengo.Node(output=1,label='in_node_2')
+    #in_node_2 = nengo.Node(output=1,label='in_node_2')
+#    nengo.Connection(in_node_0, ensemble_array_gate.gate)
+    #nengo.Connection(in_node_1, memory_block.input)
+    #nengo.Connection(in_node_2, memory_block.reset)
+    #nengo.Connection(in_node_2, selector.sel2)
+
+# Uncommenting the following will perform preprocessing on the model
+# and print the Brainstorm resources consumed by the model.
+#model = pp.preprocess(model)
+#calc,info = pp.calc_core_cost(model,verbose=True)
 
 # ----- Display stimulus seq -----
 print "STIMULUS SEQ: %s" % (str(cfg.stim_seq))
@@ -214,121 +238,124 @@ if args.nengo_gui:
     print "NENGO_VIZ STOPPED"
     sys.exit()
 
-if cfg.use_opencl:
-    import pyopencl as cl
-    import nengo_ocl
+# commented out the following code because it was not needed to analyze
+# Brainstorm resources needed by Spaun.
 
-    print "------ OCL ------"
-    print "AVAILABLE PLATFORMS: %s" % (str(cl.get_platforms()))
-
-    pltf = cl.get_platforms()[args.ocl_platform]
-
-    print "AVAILABLE DEVICES: %s" % (str(pltf.get_devices()))
-    if args.ocl_device >= 0:
-        ctx = cl.Context([pltf.get_devices()[args.ocl_device]])
-        print "USING OPENCL - device: %s" % \
-            (str(pltf.get_devices()[args.ocl_device]))
-    else:
-        ctx = cl.Context(pltf.get_devices())
-        print "USING OPENCL - devices: %s" % (str(pltf.get_devices()))
-    sim = nengo_ocl.sim_ocl.Simulator(model, dt=cfg.sim_dt, context=ctx,
-                                      profiling=args.ocl_profile)
-elif cfg.use_mpi:
-    import nengo_mpi
-
-    mpi_savefile = ('+'.join([cfg.get_probe_data_filename(mpi_savename)[:-4],
-                              ('%ip' % args.mpi_p if not args.mpi_p_auto else
-                               'autop'),
-                              '%0.2fs' % get_est_runtime()])
-                    + '.' + mpi_saveext)
-    mpi_savefile = os.path.join(cfg.data_dir, mpi_savefile)
-
-    print "USING MPI - Saving to: %s" % (mpi_savefile)
-
-    if args.mpi_p_auto:
-        assignments = {}
-        for n, module in enumerate(model.modules):
-            assignments[module] = n
-        sim = nengo_mpi.Simulator(model, dt=cfg.sim_dt,
-                                  assignments=assignments,
-                                  save_file=mpi_savefile)
-    else:
-        partitioner = nengo_mpi.Partitioner(args.mpi_p)
-        sim = nengo_mpi.Simulator(model, dt=cfg.sim_dt,
-                                  partitioner=partitioner,
-                                  save_file=mpi_savefile)
-else:
-    sim = nengo.Simulator(model, dt=cfg.sim_dt)
-
-t_build = time.time() - timestamp
-timestamp = time.time()
-print "BUILD FINISHED - build time: %fs" % t_build
-
-# ----- Spaun simulation run -----
-runtime = args.t if args.t > 0 else get_est_runtime()
-
-if cfg.use_opencl or cfg.use_ref:
-    print "START SIM - est_runtime: %f" % runtime
-
-    if cfg.use_ref:
-        run_nengo_sim(sim, cfg.sim_dt, runtime,
-                      nengo_sim_run_opts=cfg.use_ref)
-    else:
-        sim.run(runtime)
-
-    # Close output logging file
-    model.monitor.close()
-
-    if args.ocl_profile:
-        sim.print_plans()
-        sim.print_profiling()
-
-    t_simrun = time.time() - timestamp
-    print "MODEL N_NEURONS: %i" % (get_total_n_neurons(model))
-    print "FINISHED! - Build time: %fs, Sim time: %fs" % (t_build, t_simrun)
-else:
-    print "MODEL N_NEURONS: %i" % (get_total_n_neurons(model))
-    print "FINISHED! - Build time: %fs" % (t_build)
-
-    if args.mpi_compress_save:
-        import gzip
-        print "COMPRESSING net file to '%s'" % (mpi_savefile + '.gz')
-
-        with open(mpi_savefile, 'rb') as f_in:
-            with gzip.open(mpi_savefile + '.gz', 'wb') as f_out:
-                f_out.writelines(f_in)
-
-        os.remove(mpi_savefile)
-
-        print "UPLOAD '%s' to MPI cluster and decompress to run" % \
-            (mpi_savefile + '.gz')
-    else:
-        print "UPLOAD '%s' to MPI cluster to run" % mpi_savefile
-    t_simrun = -1
-
-# ----- Write probe data to file -----
-if make_probes and not cfg.use_mpi:
-    print "WRITING PROBE DATA TO FILE"
-
-    probe_data = {'trange': sim.trange(), 'stim_seq': cfg.stim_seq}
-    for probe in sim.data.keys():
-        if isinstance(probe, nengo.Probe):
-            probe_data[idstr(probe)] = sim.data[probe]
-    np.savez_compressed(os.path.join(cfg.data_dir, cfg.probe_data_filename),
-                        **probe_data)
-
-    if args.showdisp:
-        import subprocess
-        subprocess.Popen(["python", os.path.join(cur_dir,
-                                                 'disp_probe_data.py'),
-                          os.path.join(cfg.data_dir, cfg.probe_data_filename)])
-
-# ----- Write runtime data -----
-runtime_filename = os.path.join(cfg.data_dir, 'runtimes.txt')
-rt_file = open(runtime_filename, 'a')
-rt_file.write('# ---------- TIMESTAMP: %i -----------\n' % timestamp)
-rt_file.write('Backend: %s | Num neurons: %i\n' %
-              (cfg.backend, get_total_n_neurons(model)))
-rt_file.write('Build time: %fs | Model sim time: %fs | Sim wall time: %fs\n' %
-              (t_build, runtime, t_simrun))
-rt_file.close()
+#if cfg.use_opencl:
+#    import pyopencl as cl
+#    import nengo_ocl
+#
+#    print "------ OCL ------"
+#    print "AVAILABLE PLATFORMS: %s" % (str(cl.get_platforms()))
+#
+#    pltf = cl.get_platforms()[args.ocl_platform]
+#
+#    print "AVAILABLE DEVICES: %s" % (str(pltf.get_devices()))
+#    if args.ocl_device >= 0:
+#        ctx = cl.Context([pltf.get_devices()[args.ocl_device]])
+#        print "USING OPENCL - device: %s" % \
+#            (str(pltf.get_devices()[args.ocl_device]))
+#    else:
+#        ctx = cl.Context(pltf.get_devices())
+#        print "USING OPENCL - devices: %s" % (str(pltf.get_devices()))
+#    sim = nengo_ocl.sim_ocl.Simulator(model, dt=cfg.sim_dt, context=ctx,
+#                                      profiling=args.ocl_profile)
+#elif cfg.use_mpi:
+#    import nengo_mpi
+#
+#    mpi_savefile = ('+'.join([cfg.get_probe_data_filename(mpi_savename)[:-4],
+#                              ('%ip' % args.mpi_p if not args.mpi_p_auto else
+#                               'autop'),
+#                              '%0.2fs' % get_est_runtime()])
+#                    + '.' + mpi_saveext)
+#    mpi_savefile = os.path.join(cfg.data_dir, mpi_savefile)
+#
+#    print "USING MPI - Saving to: %s" % (mpi_savefile)
+#
+#    if args.mpi_p_auto:
+#        assignments = {}
+#        for n, module in enumerate(model.modules):
+#            assignments[module] = n
+#        sim = nengo_mpi.Simulator(model, dt=cfg.sim_dt,
+#                                  assignments=assignments,
+#                                  save_file=mpi_savefile)
+#    else:
+#        partitioner = nengo_mpi.Partitioner(args.mpi_p)
+#        sim = nengo_mpi.Simulator(model, dt=cfg.sim_dt,
+#                                  partitioner=partitioner,
+#                                  save_file=mpi_savefile)
+#else:
+#    sim = nengo.Simulator(model, dt=cfg.sim_dt)
+#
+#t_build = time.time() - timestamp
+#timestamp = time.time()
+#print "BUILD FINISHED - build time: %fs" % t_build
+#
+## ----- Spaun simulation run -----
+#runtime = args.t if args.t > 0 else get_est_runtime()
+#
+#if cfg.use_opencl or cfg.use_ref:
+#    print "START SIM - est_runtime: %f" % runtime
+#
+#    if cfg.use_ref:
+#        run_nengo_sim(sim, cfg.sim_dt, runtime,
+#                      nengo_sim_run_opts=cfg.use_ref)
+#    else:
+#        sim.run(runtime)
+#
+#    # Close output logging file
+#    model.monitor.close()
+#
+#    if args.ocl_profile:
+#        sim.print_plans()
+#        sim.print_profiling()
+#
+#    t_simrun = time.time() - timestamp
+#    print "MODEL N_NEURONS: %i" % (get_total_n_neurons(model))
+#    print "FINISHED! - Build time: %fs, Sim time: %fs" % (t_build, t_simrun)
+#else:
+#    print "MODEL N_NEURONS: %i" % (get_total_n_neurons(model))
+#    print "FINISHED! - Build time: %fs" % (t_build)
+#
+#    if args.mpi_compress_save:
+#        import gzip
+#        print "COMPRESSING net file to '%s'" % (mpi_savefile + '.gz')
+#
+#        with open(mpi_savefile, 'rb') as f_in:
+#            with gzip.open(mpi_savefile + '.gz', 'wb') as f_out:
+#                f_out.writelines(f_in)
+#
+#        os.remove(mpi_savefile)
+#
+#        print "UPLOAD '%s' to MPI cluster and decompress to run" % \
+#            (mpi_savefile + '.gz')
+#    else:
+#        print "UPLOAD '%s' to MPI cluster to run" % mpi_savefile
+#    t_simrun = -1
+#
+## ----- Write probe data to file -----
+#if make_probes and not cfg.use_mpi:
+#    print "WRITING PROBE DATA TO FILE"
+#
+#    probe_data = {'trange': sim.trange(), 'stim_seq': cfg.stim_seq}
+#    for probe in sim.data.keys():
+#        if isinstance(probe, nengo.Probe):
+#            probe_data[idstr(probe)] = sim.data[probe]
+#    np.savez_compressed(os.path.join(cfg.data_dir, cfg.probe_data_filename),
+#                        **probe_data)
+#
+#    if args.showdisp:
+#        import subprocess
+#        subprocess.Popen(["python", os.path.join(cur_dir,
+#                                                 'disp_probe_data.py'),
+#                          os.path.join(cfg.data_dir, cfg.probe_data_filename)])
+#
+## ----- Write runtime data -----
+#runtime_filename = os.path.join(cfg.data_dir, 'runtimes.txt')
+#rt_file = open(runtime_filename, 'a')
+#rt_file.write('# ---------- TIMESTAMP: %i -----------\n' % timestamp)
+#rt_file.write('Backend: %s | Num neurons: %i\n' %
+#              (cfg.backend, get_total_n_neurons(model)))
+#rt_file.write('Build time: %fs | Model sim time: %fs | Sim wall time: %fs\n' %
+#              (t_build, runtime, t_simrun))
+#rt_file.close()

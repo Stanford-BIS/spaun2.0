@@ -24,15 +24,18 @@ def Spaun():
         model.config[nengo.Ensemble].n_neurons = cfg.n_neurons_ens
         model.config[nengo.Connection].synapse = cfg.pstc
 
-        model.stim = Stimulus()
-        model.vis = Vision()
-        model.ps = ProdSys()
-        model.enc = InfoEnc()
+        # commented out all modules but WorkingMemory in order to 
+        # analyze the Brainstorm resources consumed from just that
+        # module
+        #model.stim = Stimulus()
+        #model.vis = Vision()
+        #model.ps = ProdSys()
+        #model.enc = InfoEnc()
         model.mem = Memory()
-        model.trfm = TrfmSys()
-        model.dec = InfoDec()
-        model.mtr = Motor()
-        model.monitor = Monitor()
+        #model.trfm = TrfmSys()
+        #model.dec = InfoDec()
+        #model.mtr = Motor()
+        #model.monitor = Monitor()
 
         if hasattr(model, 'vis') and hasattr(model, 'ps') and \
            hasattr(model, 'trfm'):
