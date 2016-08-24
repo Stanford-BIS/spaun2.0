@@ -46,7 +46,7 @@ def calc_new_costs(model):
                                                                                 
         if isinstance(conn.pre_obj, nengo.Node) and isinstance(conn.post_obj, nengo.Node) \
             and not pp.is_identity_like(conn.transform):                        
-            transform_count += (conn.pre_obj.size_in * conn.post_obj.size_in)   
+            transform_count += (conn.pre_obj.size_out * conn.post_obj.size_in)   
                                                                                 
                                                                                 
     return encoding_weights, decoding_weights, transform_count                  
