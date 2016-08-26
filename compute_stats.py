@@ -51,7 +51,7 @@ def calc_new_costs(model):
                                                                                 
     return encoding_weights, decoding_weights, transform_count                  
 
-def compute_stats(model):
+def compute_stats(model,print_results=False):
     # Number of ensembles with no output connection; This should never happen          
     num_ensembles_with_no_output_conn = 0                                           
     # Dictionary mapping Ensemble to it's total synapse count                       
@@ -117,6 +117,8 @@ def compute_stats(model):
     for ens in model.all_ensembles:                                       
         total_num_neurons += ens.n_neurons                                          
 
+    total_ensembles=len(model.all_ensembles)
+
     # Total fanout                                                                  
     total_ens_per_ensemble = sum([len(v) for k,v in ens_ens_conn.items()])          
 
@@ -135,6 +137,9 @@ def compute_stats(model):
     # Total transform resource count
     total_transform_resource_count = transform_count
 
+    total_mem_count = total_transform_resource_count + total_encoding_weights + total_decoding_weights
+    compression = float(total_mem_count) / float(total_num_synapses)
+
     # average number of neurons per ensemble                                        
     avg_nrn_per_ensemble = np.mean([e.n_neurons for e in model.all_ensembles])
 
@@ -142,20 +147,24 @@ def compute_stats(model):
     avg_ens_per_ensemble = np.mean([len(v) for k,v in ens_ens_conn.items()])        
 
     # average number of synapses per neuron                                         
-    avg_syn_per_neuron = total_num_synapses / total_num_neurons                     
+    avg_syn_per_neuron = total_num_synapses / float(total_num_neurons)                     
 
-    print "Total number of neurons = %i" % total_num_neurons                        
+    if print_results:
+        print "Total number of neurons = %i" % total_num_neurons                        
+        print "Total number of ensembles = %i" % total_ensembles
+        print "Total number of synapses = %i" % total_num_synapses                      
+        print "Total fanout = %i" % total_ens_per_ensemble                              
+        print "Total decoding weights = %i" % total_decoding_weights                    
+        print "Total encoding weights = %i" % total_encoding_weights
+        print "Total transform resource count = %i\n" % total_transform_resource_count
+        print "Compression = %0.6f\n" % compression
+        print "Average number of neurons per ensemble = %.2f" % avg_nrn_per_ensemble    
+        print "Average number of synapses per neuron = %.2f" % avg_syn_per_neuron       
+        print "Average fanout = %.2f" % avg_ens_per_ensemble
 
-    print "Total number of ensembles = %i" % len(model.all_ensembles)     
-    print "Total number of synapses = %i" % total_num_synapses                      
-    print "Total fanout = %i" % total_ens_per_ensemble                              
-    print "Total decoding weights = %i" % total_decoding_weights                    
-    print "Total encoding weights = %i" % total_encoding_weights
-    print "Total transform resource count = %i\n" % total_transform_resource_count
-    total_mem_count = total_transform_resource_count + total_encoding_weights + total_decoding_weights
-    compression = float(total_mem_count) / float(total_num_synapses)
-    print "Compression = %0.6f\n" % compression
-    
-    print "Average number of neurons per ensemble = %.2f" % avg_nrn_per_ensemble    
-    print "Average number of synapses per neuron = %.2f" % avg_syn_per_neuron       
-    print "Average fanout = %.2f" % avg_ens_per_ensemble
+    return { "N_NRN":total_num_neurons, "N_ENS": total_ensembles, \
+            "N_SYN": total_num_synapses, "N_FAN": total_ens_per_ensemble, \
+            "N_D": total_decoding_weights, "N_E": total_encoding_weights, \
+            "N_T": total_transform_resource_count, "C": compression, \
+            "R_NRN_ENS": avg_nrn_per_ensemble, "R_SYN_NRN": avg_syn_per_neuron,\
+            "R_FAN_ENS": avg_ens_per_ensemble }
