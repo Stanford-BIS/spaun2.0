@@ -13,7 +13,7 @@ import nengo
 import nengo_brainstorm_pp.preprocessing as pp
 
 # ----- Defaults -----
-def_dim = 2
+def_dim = 5
 #def_seq = 'A'
 # def_seq = 'A0[#1]?X'
 # def_seq = 'A0[#1#2#3]?XXX'
@@ -245,9 +245,9 @@ def add_stubs_for_wm_model(model):
 
 # Uncommenting the following will perform preprocessing on the model            
 # and print the Brainstorm resources consumed by the model.                     
-model = add_stubs_for_wm_model(model)
-model = pp.preprocess(model, find_io = False)                                                   
-calc,info = pp.calc_core_cost(model,verbose=True)     
+#model = add_stubs_for_wm_model(model)
+#model = pp.preprocess(model, find_io = False)                                                   
+#calc,info = pp.calc_core_cost(model,verbose=True)     
 # ----- Display stimulus seq -----
 print "STIMULUS SEQ: %s" % (str(cfg.stim_seq))
 
@@ -277,3 +277,10 @@ if hasattr(model, 'dec'):
 if hasattr(model, 'mtr'):
     print "- mtr  n_neurons: %i" % (get_total_n_neurons(model.mtr))
 
+if args.nengo_gui:
+    print "STARTING NENGO_GUI"
+    import nengo_gui
+    nengo_gui.Viz(__file__, model=model, locals=locals(),
+                  interactive=False).start()
+    print "NENGO_VIZ STOPPED"
+    sys.exit()

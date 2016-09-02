@@ -43,12 +43,14 @@ def calc_new_costs(model):
                 assert conn.pre_obj.size_out == 1                               
                 ens = conn.post_obj.ensemble                                    
                 encoding_weights += ens.dimensions * ens.n_neurons              
-                                                                                
-        if isinstance(conn.pre_obj, nengo.Node) and isinstance(conn.post_obj, nengo.Node) \
-            and not pp.is_identity_like(conn.transform):                        
-            transform_count += (conn.pre_obj.size_out * conn.post_obj.size_in)   
-                                                                                
-                                                                                
+
+        if isinstance(conn.pre_obj, pp.Decoder) and (isinstance(conn.post_obj, pp.Encoder) or isinstance(conn.post_obj,pp.NeuronEncoder)):
+            transform_count += conn.transform.size
+        elif isinstance(conn.pre_obj, nengo.Node) and (isinstance(conn.post_obj, pp.Encoder) or isinstance(conn.post_obj,pp.NeuronEncoder)):
+                transform_count += conn.transform.size
+        elif isinstance(conn.pre_obj, pp.Decoder) and (isinstance(conn.post_obj, nengo.Node) and not isinstance(conn.post_obj,pp.ProbeNode)):
+            transform_count += conn.transform.size
+
     return encoding_weights, decoding_weights, transform_count                  
 
 def compute_stats(model,print_results=False):
@@ -77,6 +79,7 @@ def compute_stats(model,print_results=False):
     #############################################################################   
     # Populate the ens_ens_conn dictionary                                          
     #############################################################################   
+
     for ens in model.all_ensembles:                                         
         ens_ens_conn[ens] = []                                                         
         if ens not in adjacency_list:                                                  
@@ -97,6 +100,9 @@ def compute_stats(model,print_results=False):
                 if isinstance(top_conn.post_obj,nengo.Ensemble):                       
                     if top_conn.post_obj not in ens_ens_conn[ens]:                     
                         ens_ens_conn[ens].append(top_conn.post_obj)                    
+                elif isinstance(top_conn.post_obj,nengo.ensemble.Neurons):
+                    if top_conn.post_obj.ensemble not in ens_ens_conn[ens]:                     
+                        ens_ens_conn[ens].append(top_conn.post_obj.ensemble)                    
                 else:                                                                  
                     # If the top Connections post object has Connections, add those Connections to the stack so we can
                     # traverse it                                                      
@@ -107,10 +113,16 @@ def compute_stats(model,print_results=False):
     if num_ensembles_with_no_output_conn > 0:                                          
         print "Warning: Number of ensembles with no output connection == %i\n" % num_ensembles_with_no_output_conn
 
-    # Populate the num_synapses dict                                                   
-    for ens, ens_list in ens_ens_conn.items():                                         
+    # Populate the num_synapses dict
+    for ens, ens_list in ens_ens_conn.items():
         num_neurons_in_connected_ens = sum([e.n_neurons for e in ens_list])            
         num_synapses_per_ens[ens] = ens.n_neurons * num_neurons_in_connected_ens       
+
+    new_conn_list = []
+
+    for conn in model.all_connections:
+        if isinstance(conn.pre_obj, pp.Decoder) and (isinstance(conn.post_obj, pp.Encoder) or isinstance(conn.post_obj,pp.NeuronEncoder)):
+            new_conn_list.append(conn)
 
     # Total number of neurons in preprocessed model taken from the information returned from executing run_spaun.py
     total_num_neurons = 0                                                           
