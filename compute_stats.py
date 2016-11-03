@@ -48,7 +48,7 @@ def calc_new_costs(model):
             transform_count += conn.transform.size
         elif isinstance(conn.pre_obj, nengo.Node) and (isinstance(conn.post_obj, pp.Encoder) or isinstance(conn.post_obj,pp.NeuronEncoder)):
                 transform_count += conn.transform.size
-        elif isinstance(conn.pre_obj, pp.Decoder) and (isinstance(conn.post_obj, nengo.Node) and not isinstance(conn.post_obj,pp.ProbeNode)):
+        elif isinstance(conn.pre_obj, pp.Decoder) and isinstance(conn.post_obj, nengo.Node):
             transform_count += conn.transform.size
 
     return encoding_weights, decoding_weights, transform_count                  
